@@ -6,47 +6,48 @@ from mcp_server.storage.logger import MCPLogger
 from mcp_server.core.approval_manager import ApprovalManager
 
 class MCPExecutor:
-    def __init__(self, token):
+    def __init__(self, token: str):
         self.client = DiscordClient(token)
         self.policy = PolicyEngine()
         self.logger = MCPLogger()
         self.approvals = ApprovalManager()
 
 
-    async def execute(self, route: str, params: dict, body: dict = None):
-
-
-        #Policy Check
-        decision = self.policy.evaluate(route, params)        
-        self.logger.log({
-            "route" : route,
-            "params" : params,
-            "decision" : decision,
-            "status" : "policy_checked"
-        })
-
-        if decision == "DENY":
-
+    async def execute(self, route: str, params: dict, body: dict = None, bypass_policy=False):
+        
+        #Policy Check 
+        if not bypass_policy:
+            decision = self.policy.evaluate(route, params)        
             self.logger.log({
-            "route": route,
-            "status": "denied"
+                "route" : route,
+                "params" : params,
+                "decision" : decision,
+                "status" : "policy_checked"
             })
 
-            return {"error" : f"Denied by policy: {route}"}
-        
-        if decision == "ASK":
+            if decision == "DENY":
 
-            request_id = self.approvals.create_request(route,params,body)
+                self.logger.log({
+                "route": route,
+                "status": "denied"
+                })
 
-            self.logger.log({
-            "route": route,
-            "status": "pending_approval"
-            })  
-            return {
-                "status" : "approval_required",
-                "route" : route,
-                "params" : params
-            }
+                return {"error" : f"Denied by policy: {route}"}
+
+            if decision == "ASK":
+
+                request_id = self.approvals.create_request(route,params,body)
+
+                self.logger.log({
+                "route": route,
+                "status": "pending_approval"
+                })  
+                return {
+                    "status" : "approval_required",
+                    "request_id" : request_id,
+                    "route" : route,
+                    "params" : params
+                }
 
 
         #Route Config
@@ -107,7 +108,7 @@ class MCPExecutor:
             "route": route,
             "status": "request_approved"
             })
-        return await self.execute(route, params, body)
+        return await self.execute(route, params, body, bypass_policy=True)
 
     def deny(self, request_id: str):
         request = self.approvals.get_request(request_id)
