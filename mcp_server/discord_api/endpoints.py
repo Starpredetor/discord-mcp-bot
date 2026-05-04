@@ -7,7 +7,8 @@
 def get_messages(channel_id):
     return f"/channels/{channel_id}/messages"
 
-def get_message(channel_id, message_id):
+# GET (for single messsage)
+def fetch_message(channel_id, message_id):
     return f"/channels/{channel_id}/messages/{message_id}"
 
 #POST
