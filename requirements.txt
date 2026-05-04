@@ -1,2 +1,5 @@
+fastapi
+uvicorn
+httpx
 py-cord
-dotenv
+pydantic
