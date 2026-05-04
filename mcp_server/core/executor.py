@@ -3,12 +3,14 @@ from mcp_server.discord_api import endpoints as ep
 from mcp_server.core.route_map import ROUTE_MAP
 from mcp_server.core.policy_engine import PolicyEngine
 from mcp_server.storage.logger import MCPLogger
+from mcp_server.core.approval_manager import ApprovalManager
 
 class MCPExecutor:
     def __init__(self, token):
         self.client = DiscordClient(token)
         self.policy = PolicyEngine()
         self.logger = MCPLogger()
+        self.approvals = ApprovalManager()
 
 
     async def execute(self, route: str, params: dict, body: dict = None):
@@ -24,13 +26,18 @@ class MCPExecutor:
         })
 
         if decision == "DENY":
+
             self.logger.log({
             "route": route,
             "status": "denied"
             })
+
             return {"error" : f"Denied by policy: {route}"}
         
         if decision == "ASK":
+
+            request_id = self.approvals.create_request(route,params,body)
+
             self.logger.log({
             "route": route,
             "status": "pending_approval"
@@ -84,3 +91,35 @@ class MCPExecutor:
             })
 
         return {"error": str(e)}
+    
+    async def approve(self, request_id: str):
+        request = self.approvals.get_request(request_id)
+
+        if not request:
+            return {"error" : "Invalid or expired request"}
+        
+        route = request["route"]
+        params = request["params"]
+        body = request["body"]
+
+        self.approvals.remove_request(request_id)
+        self.logger.log({
+            "route": route,
+            "status": "request_approved"
+            })
+        return await self.execute(route, params, body)
+
+    def deny(self, request_id: str):
+        request = self.approvals.get_request(request_id)
+    
+        if not request:
+            return {"error": "Invalid or expired request"}
+    
+        self.approvals.remove_request(request_id)
+        
+        self.logger.log({
+            "request": request_id,
+            "status": "request_denied"
+            }) 
+    
+        return {"status": "denied", "request_id": request_id}
